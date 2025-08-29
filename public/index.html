@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Organization App</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Organization App</h1>
+            <nav>
+                <button id="goals-tab" class="tab-button active">Goals</button>
+                <button id="todo-tab" class="tab-button">To Do List</button>
+                <button id="calendar-tab" class="tab-button">Calendar</button>
+                <button id="weekly-tab" class="tab-button">Weekly Plan</button>
+                <button id="analytics-tab" class="tab-button">Analytics</button>
+            </nav>
+        </header>
+
+        <main>
+            <!-- Goals Section -->
+            <section id="goals-section" class="tab-content active">
+                <div class="goals-header">
+                    <h2>Goals & Tasks</h2>
+                    <div class="header-buttons">
+                        <button id="add-category-btn" class="btn-secondary">Add Category</button>
+                        <button id="add-goal-btn" class="btn-primary">Add Goal</button>
+                    </div>
+                </div>
+                
+                <div class="categories-grid">
+                    <div class="category" data-category="play">
+                        <h3>Play</h3>
+                        <div class="goals-list" id="play-goals"></div>
+                    </div>
+                    <div class="category" data-category="stand-up-production">
+                        <h3>Stand Up Production</h3>
+                        <div class="goals-list" id="stand-up-production-goals"></div>
+                    </div>
+                    <div class="category" data-category="stand-up-writing">
+                        <h3>Stand Up Writing</h3>
+                        <div class="goals-list" id="stand-up-writing-goals"></div>
+                    </div>
+                    <div class="category" data-category="technical-professional">
+                        <h3>Technical/Professional</h3>
+                        <div class="goals-list" id="technical-professional-goals"></div>
+                    </div>
+                    <div class="category" data-category="communication">
+                        <h3>Communication</h3>
+                        <div class="goals-list" id="communication-goals"></div>
+                    </div>
+                    <div class="category" data-category="chores">
+                        <h3>Chores</h3>
+                        <div class="goals-list" id="chores-goals"></div>
+                    </div>
+                </div>
+
+                <div class="completed-goals">
+                    <h3>Completed Goals</h3>
+                    <div id="completed-goals-list"></div>
+                </div>
+            </section>
+
+            <!-- To do List Section -->
+            <section id="todo-section" class="tab-content">
+                <div class="todo-header">
+                    <h2>Todo List</h2>
+                    <form id="quick-todo-form" class="quick-add-form">
+                        <input type="text" id="quick-todo-input" placeholder="Add a new to do item..." required>
+                        <select id="quick-todo-category">
+                            <option value="">Select category (optional)</option>
+                        </select>
+                        <button type="submit" class="btn-primary">Add</button>
+                    </form>
+                </div>
+                
+                <div class="todo-lists">
+                    <div class="active-todos">
+                        <h3>Active Tasks</h3>
+                        <div id="active-todos-list" class="todo-items"></div>
+                    </div>
+                    
+                    <div class="completed-todos">
+                        <h3>Completed Tasks</h3>
+                        <div id="completed-todos-list" class="todo-items"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Calendar Section -->
+            <section id="calendar-section" class="tab-content">
+                <h2>Time Blocking Calendar</h2>
+                <div id="calendar"></div>
+                <button id="add-timeblock-btn" class="btn-primary">Add Time Block</button>
+            </section>
+
+            <!-- Weekly Planning Section -->
+            <section id="weekly-section" class="tab-content">
+                <h2>Weekly Planning</h2>
+                <div id="weekly-plan"></div>
+            </section>
+
+            <!-- Analytics Section -->
+            <section id="analytics-section" class="tab-content">
+                <h2>Productivity Analytics</h2>
+                <div id="analytics-content"></div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="goal-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="modal-title">Add Goal</h2>
+            <form id="goal-form">
+                <input type="text" id="goal-title" placeholder="Goal title" required>
+                <select id="goal-category" required>
+                    <option value="">Select category</option>
+                    <option value="play">Play</option>
+                    <option value="stand-up-production">Stand Up Production</option>
+                    <option value="stand-up-writing">Stand Up Writing</option>
+                    <option value="technical-professional">Technical/Professional</option>
+                    <option value="communication">Communication</option>
+                    <option value="chores">Chores</option>
+                </select>
+                <textarea id="goal-description" placeholder="Description"></textarea>
+                <select id="goal-priority">
+                    <option value="low">Low Priority</option>
+                    <option value="medium" selected>Medium Priority</option>
+                    <option value="high">High Priority</option>
+                </select>
+                <input type="date" id="goal-due-date">
+                <div class="progress-input-container">
+                    <label for="goal-progress">Initial Progress:</label>
+                    <input type="range" id="goal-progress" min="0" max="100" value="0">
+                    <span id="progress-display">0%</span>
+                </div>
+                <div id="subtasks-container">
+                    <h4>Subtasks</h4>
+                    <div id="subtasks-list"></div>
+                    <button type="button" id="add-subtask-btn">Add Subtask</button>
+                </div>
+                <button type="submit" class="btn-primary">Save Goal</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="category-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="app.closeCategoryModal()">&times;</span>
+            <h2>Add New Category</h2>
+            <form id="category-form">
+                <input type="text" id="category-name" placeholder="Category name" required>
+                <input type="color" id="category-color" value="#007AFF">
+                <button type="submit" class="btn-primary">Add Category</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
