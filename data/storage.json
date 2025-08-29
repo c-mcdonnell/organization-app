@@ -38,6 +38,45 @@
       "createdAt": "2025-08-29T20:00:23.911Z",
       "completedAt": null,
       "progress": 0
+    },
+    {
+      "id": "1756498396422",
+      "title": "create trello board for organization app",
+      "category": "technical-professional",
+      "description": "",
+      "priority": "medium",
+      "dueDate": null,
+      "subtasks": [],
+      "status": "active",
+      "createdAt": "2025-08-29T20:13:16.431Z",
+      "completedAt": null,
+      "progress": 0
+    },
+    {
+      "id": "1756498416520",
+      "title": "create README",
+      "category": "technical-professional",
+      "description": "",
+      "priority": "medium",
+      "dueDate": null,
+      "subtasks": [],
+      "status": "active",
+      "createdAt": "2025-08-29T20:13:36.530Z",
+      "completedAt": null,
+      "progress": 0
+    },
+    {
+      "id": "1756498454103",
+      "title": "add calendar functionality to become familiar with github",
+      "category": "technical-professional",
+      "description": "",
+      "priority": "medium",
+      "dueDate": null,
+      "subtasks": [],
+      "status": "active",
+      "createdAt": "2025-08-29T20:14:14.114Z",
+      "completedAt": null,
+      "progress": 0
     }
   ],
   "timeBlocks": [],
