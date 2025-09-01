@@ -1,0 +1,78 @@
+{
+  "goals": [
+    {
+      "id": "example-goal-1",
+      "title": "Example Goal: Learn a New Skill",
+      "category": "technical-professional",
+      "description": "This is an example goal to demonstrate the app functionality",
+      "priority": "medium",
+      "dueDate": "2025-12-31",
+      "subtasks": [
+        {
+          "id": "example-subtask-1",
+          "title": "Research learning resources",
+          "completed": false,
+          "dueDate": null,
+          "notes": ""
+        },
+        {
+          "id": "example-subtask-2", 
+          "title": "Create study schedule",
+          "completed": true,
+          "dueDate": null,
+          "notes": "Completed last week"
+        }
+      ],
+      "status": "active",
+      "createdAt": "2025-01-01T10:00:00Z",
+      "completedAt": null,
+      "progress": 0.3
+    }
+  ],
+  "timeBlocks": [],
+  "weeklyPlans": [],
+  "categories": [
+    {
+      "id": "play",
+      "name": "Play",
+      "color": "#FF6B6B"
+    },
+    {
+      "id": "stand-up-production",
+      "name": "Stand Up Production",
+      "color": "#4ECDC4"
+    },
+    {
+      "id": "stand-up-writing",
+      "name": "Stand Up Writing",
+      "color": "#45B7D1"
+    },
+    {
+      "id": "technical-professional",
+      "name": "Technical/Professional",
+      "color": "#96CEB4"
+    },
+    {
+      "id": "communication",
+      "name": "Communication",
+      "color": "#FFEAA7"
+    },
+    {
+      "id": "chores",
+      "name": "Chores",
+      "color": "#DDA0DD"
+    },
+    {
+      "id": "writing",
+      "name": "Writing",
+      "color": "#007aff"
+    }
+  ],
+  "analytics": {
+    "productivityPatterns": {
+      "byTimeOfDay": {},
+      "byCategory": {}
+    },
+    "suggestions": []
+  }
+}
