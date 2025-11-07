@@ -17,26 +17,33 @@ async function loadData() {
     const data = await fs.readFile(DATA_FILE, 'utf8');
     return JSON.parse(data);
   } catch (error) {
-    return {
-      goals: [],
-      timeBlocks: [],
-      weeklyPlans: [],
-      categories: [
-        { id: 'play', name: 'Play', color: '#FF6B6B' },
-        { id: 'stand-up-production', name: 'Stand Up Production', color: '#4ECDC4' },
-        { id: 'stand-up-writing', name: 'Stand Up Writing', color: '#45B7D1' },
-        { id: 'technical-professional', name: 'Technical/Professional', color: '#96CEB4' },
-        { id: 'communication', name: 'Communication', color: '#FFEAA7' },
-        { id: 'chores', name: 'Chores', color: '#DDA0DD' }
-      ],
-      analytics: {
-        productivityPatterns: {
-          byTimeOfDay: {},
-          byCategory: {}
-        },
-        suggestions: []
-      }
-    };
+    // If file doesn't exist, create it with default data
+    if (error.code === 'ENOENT') {
+      console.log('Data file not found. Creating with default data...');
+      const defaultData = {
+        goals: [],
+        timeBlocks: [],
+        weeklyPlans: [],
+        categories: [
+          { id: 'play', name: 'Play', color: '#FF6B6B' },
+          { id: 'stand-up-production', name: 'Stand Up Production', color: '#4ECDC4' },
+          { id: 'stand-up-writing', name: 'Stand Up Writing', color: '#45B7D1' },
+          { id: 'technical-professional', name: 'Technical/Professional', color: '#96CEB4' },
+          { id: 'communication', name: 'Communication', color: '#FFEAA7' },
+          { id: 'chores', name: 'Chores', color: '#DDA0DD' }
+        ],
+        analytics: {
+          productivityPatterns: {
+            byTimeOfDay: {},
+            byCategory: {}
+          },
+          suggestions: []
+        }
+      };
+      await saveData(defaultData);
+      return defaultData;
+    }
+    throw error;
   }
 }
 
@@ -132,18 +139,69 @@ app.post('/api/categories', async (req, res) => {
   try {
     const data = await loadData();
     if (!data.categories) data.categories = [];
-    
+
     const newCategory = {
       id: req.body.name.toLowerCase().replace(/\s+/g, '-'),
       name: req.body.name,
       color: req.body.color || '#007AFF'
     };
-    
+
     data.categories.push(newCategory);
     await saveData(data);
     res.json(newCategory);
   } catch (error) {
     res.status(500).json({ error: 'Failed to create category' });
+  }
+});
+
+app.put('/api/categories/:id', async (req, res) => {
+  try {
+    const data = await loadData();
+    const categoryIndex = data.categories.findIndex(c => c.id === req.params.id);
+    if (categoryIndex === -1) {
+      return res.status(404).json({ error: 'Category not found' });
+    }
+
+    data.categories[categoryIndex] = {
+      ...data.categories[categoryIndex],
+      name: req.body.name,
+      color: req.body.color
+    };
+
+    await saveData(data);
+    res.json(data.categories[categoryIndex]);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update category' });
+  }
+});
+
+app.delete('/api/goals/:id', async (req, res) => {
+  try {
+    const data = await loadData();
+    const goalIndex = data.goals.findIndex(g => g.id === req.params.id);
+    if (goalIndex === -1) {
+      return res.status(404).json({ error: 'Goal not found' });
+    }
+    data.goals.splice(goalIndex, 1);
+    await saveData(data);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete goal' });
+  }
+});
+
+app.delete('/api/timeblocks/:id', async (req, res) => {
+  try {
+    const data = await loadData();
+    const blockIndex = data.timeBlocks.findIndex(b => b.id === req.params.id);
+    if (blockIndex === -1) {
+      return res.status(404).json({ error: 'Time block not found' });
+    }
+    data.timeBlocks.splice(blockIndex, 1);
+    await saveData(data);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete time block' });
   }
 });
 

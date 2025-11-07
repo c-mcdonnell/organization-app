@@ -5,7 +5,8 @@ class OrganizationApp {
         this.analytics = {};
         this.categories = [];
         this.currentEditingGoal = null;
-        
+        this.currentEditingCategoryId = null;
+
         this.initializeApp();
     }
 
@@ -51,6 +52,7 @@ class OrganizationApp {
         document.getElementById('add-category-btn').addEventListener('click', () => this.openCategoryModal());
         document.getElementById('goal-form').addEventListener('submit', (e) => this.handleGoalSubmit(e));
         document.getElementById('category-form').addEventListener('submit', (e) => this.handleCategorySubmit(e));
+        document.getElementById('edit-category-form').addEventListener('submit', (e) => this.handleEditCategorySubmit(e));
         document.querySelector('.close').addEventListener('click', () => this.closeGoalModal());
         document.getElementById('add-subtask-btn').addEventListener('click', () => this.addSubtaskInput());
         
@@ -68,13 +70,62 @@ class OrganizationApp {
             if (e.target === document.getElementById('category-modal')) {
                 this.closeCategoryModal();
             }
+            if (e.target === document.getElementById('edit-category-modal')) {
+                this.closeEditCategoryModal();
+            }
         });
+    }
+
+    openEditCategoryModal(categoryId) {
+        this.currentEditingCategoryId = categoryId;
+        const category = this.categories.find(c => c.id === categoryId);
+        if (!category) return;
+
+        document.getElementById('edit-category-name').value = category.name;
+        document.getElementById('edit-category-color').value = category.color;
+        document.getElementById('edit-category-modal').style.display = 'block';
+    }
+
+    closeEditCategoryModal() {
+        document.getElementById('edit-category-modal').style.display = 'none';
+        this.currentEditingCategoryId = null;
+    }
+
+    async handleEditCategorySubmit(e) {
+        e.preventDefault();
+
+        if (!this.currentEditingCategoryId) return;
+
+        const updatedCategory = {
+            id: this.currentEditingCategoryId,
+            name: document.getElementById('edit-category-name').value,
+            color: document.getElementById('edit-category-color').value
+        };
+
+        try {
+            const response = await fetch(`/api/categories/${this.currentEditingCategoryId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updatedCategory)
+            });
+
+            if (response.ok) {
+                await this.loadData();
+                this.renderCategoriesGrid();
+                this.updateCategorySelect();
+                this.renderGoals();
+                this.closeEditCategoryModal();
+                document.getElementById('edit-category-form').reset();
+            }
+        } catch (error) {
+            console.error('Failed to update category:', error);
+        }
     }
 
     switchTab(tab) {
         document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-        
+
         document.getElementById(`${tab}-tab`).classList.add('active');
         document.getElementById(`${tab}-section`).classList.add('active');
 
@@ -87,6 +138,8 @@ class OrganizationApp {
         } else if (tab === 'todo') {
             this.renderTodoList();
             this.setupTodoEventListeners();
+        } else if (tab === 'completed') {
+            this.renderCompletedGoals();
         }
     }
 
@@ -94,13 +147,12 @@ class OrganizationApp {
         this.currentEditingGoal = goal;
         const modal = document.getElementById('goal-modal');
         const form = document.getElementById('goal-form');
-        
+
         if (goal) {
             document.getElementById('modal-title').textContent = 'Edit Goal';
             document.getElementById('goal-title').value = goal.title;
             document.getElementById('goal-category').value = goal.category;
             document.getElementById('goal-description').value = goal.description || '';
-            document.getElementById('goal-priority').value = goal.priority;
             document.getElementById('goal-due-date').value = goal.dueDate || '';
             document.getElementById('goal-progress').value = (goal?.progress || 0) * 100;
             document.getElementById('progress-display').textContent = Math.round((goal?.progress || 0) * 100);
@@ -110,7 +162,22 @@ class OrganizationApp {
             form.reset();
             this.clearSubtasks();
         }
-        
+
+        modal.style.display = 'block';
+    }
+
+    openGoalModalForCategory(categoryId) {
+        this.currentEditingGoal = null;
+        const modal = document.getElementById('goal-modal');
+        const form = document.getElementById('goal-form');
+
+        document.getElementById('modal-title').textContent = 'Add Goal';
+        form.reset();
+        this.clearSubtasks();
+
+        // Pre-select the category
+        document.getElementById('goal-category').value = categoryId;
+
         modal.style.display = 'block';
     }
 
@@ -195,7 +262,7 @@ class OrganizationApp {
             title: document.getElementById('goal-title').value,
             category: document.getElementById('goal-category').value,
             description: document.getElementById('goal-description').value,
-            priority: document.getElementById('goal-priority').value,
+            priority: 'medium',
             dueDate: document.getElementById('goal-due-date').value || null,
             progress: document.getElementById('goal-progress').value / 100,
             subtasks: subtasks,
@@ -230,12 +297,13 @@ class OrganizationApp {
     }
 
     calculateProgress(goal) {
-        // If manual progress exists, use it; otherwise calculate from subtasks
-        if (goal.manualProgress !== undefined) return goal.manualProgress;
-        // existing subtask calculation logic
-        if (!goal.subtasks || goal.subtasks.length === 0) return goal.progress || 0;
-        const completed = goal.subtasks.filter(subtask => subtask.completed).length;
-        return completed / goal.subtasks.length;
+        // If goal has subtasks, calculate from completion
+        if (goal.subtasks && goal.subtasks.length > 0) {
+            const completed = goal.subtasks.filter(subtask => subtask.completed).length;
+            return completed / goal.subtasks.length;
+        }
+        // Otherwise use manual progress
+        return goal.progress || 0;
     }
 
     async updateGoalProgress(goalId) {
@@ -259,6 +327,7 @@ class OrganizationApp {
                 body: JSON.stringify(goal)
             });
             this.renderGoals();
+            this.renderCompletedGoals();
         } catch (error) {
             console.error('Failed to update goal:', error);
         }
@@ -266,9 +335,17 @@ class OrganizationApp {
 
     async updateProgress(goalId, newPercent) {
         const goal = this.goals.find(g => g.id === goalId);
-        goal.manualProgress = newPercent / 100;
-        goal.progress = goal.manualProgress;
-        
+        if (!goal) return;
+
+        // Don't allow manual progress updates if goal has subtasks
+        if (goal.subtasks && goal.subtasks.length > 0) {
+            alert('Progress is automatically calculated from subtasks. Complete subtasks to update progress.');
+            this.renderGoals();
+            return;
+        }
+
+        goal.progress = newPercent / 100;
+
         // Mark as completed if 100%
         if (goal.progress === 1 && goal.status !== 'completed') {
             goal.status = 'completed';
@@ -284,7 +361,10 @@ class OrganizationApp {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(goal)
             });
+            await this.loadData();
             this.renderGoals();
+            this.renderCompletedGoals();
+            this.renderTodoList();
         } catch (error) {
             console.error('Failed to update progress:', error);
         }
@@ -302,7 +382,13 @@ class OrganizationApp {
         const categoriesGrid = document.querySelector('.categories-grid');
         categoriesGrid.innerHTML = this.categories.map(category => `
             <div class="category" data-category="${category.id}">
-                <h3 style="color: ${category.color}">${category.name}</h3>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <h3 style="margin-bottom: 0;">${category.name}</h3>
+                    <div style="display: flex; gap: 6px;">
+                        <button class="btn-secondary" onclick="app.openEditCategoryModal('${category.id}')" style="font-size: 0.85em; padding: 6px 12px;">Edit</button>
+                        <button class="btn-secondary" onclick="app.openGoalModalForCategory('${category.id}')" style="font-size: 0.85em; padding: 6px 12px;">+ Add Goal</button>
+                    </div>
+                </div>
                 <div class="goals-list" id="${category.id}-goals"></div>
             </div>
         `).join('');
@@ -324,9 +410,70 @@ class OrganizationApp {
             if (container) {
                 const categoryGoals = this.goals.filter(goal => goal.category === category.id && goal.status === 'active');
                 container.innerHTML = categoryGoals.map(goal => this.renderGoalItem(goal)).join('');
+                this.setupDragAndDrop(container);
+            }
+        });
+    }
+
+    setupDragAndDrop(container) {
+        const goalItems = container.querySelectorAll('.goal-item');
+
+        goalItems.forEach(item => {
+            item.addEventListener('dragstart', (e) => {
+                e.target.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/html', e.target.innerHTML);
+                e.dataTransfer.setData('goalId', e.target.getAttribute('data-goal-id'));
+            });
+
+            item.addEventListener('dragend', (e) => {
+                e.target.classList.remove('dragging');
+            });
+        });
+
+        container.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            container.classList.add('drag-over');
+        });
+
+        container.addEventListener('dragleave', (e) => {
+            if (e.target === container) {
+                container.classList.remove('drag-over');
             }
         });
 
+        container.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            container.classList.remove('drag-over');
+
+            const goalId = e.dataTransfer.getData('goalId');
+            const newCategoryId = container.id.replace('-goals', '');
+
+            await this.moveGoalToCategory(goalId, newCategoryId);
+        });
+    }
+
+    async moveGoalToCategory(goalId, newCategoryId) {
+        const goal = this.goals.find(g => g.id === goalId);
+        if (!goal || goal.category === newCategoryId) return;
+
+        goal.category = newCategoryId;
+
+        try {
+            await fetch(`/api/goals/${goalId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(goal)
+            });
+            await this.loadData();
+            this.renderGoals();
+            this.renderTodoList();
+        } catch (error) {
+            console.error('Failed to move goal:', error);
+        }
+    }
+
+    renderCompletedGoals() {
         const completedContainer = document.getElementById('completed-goals-list');
         const completedGoals = this.goals.filter(goal => goal.status === 'completed');
         completedContainer.innerHTML = completedGoals.map(goal => this.renderGoalItem(goal, true)).join('');
@@ -335,18 +482,18 @@ class OrganizationApp {
     renderGoalItem(goal, isCompleted = false) {
         const progress = goal.progress || this.calculateProgress(goal);
         const progressPercent = Math.round(progress * 100);
-        
+
         return `
-            <div class="goal-item ${isCompleted ? 'completed' : ''} priority-${goal.priority}" data-goal-id="${goal.id}">
+            <div class="goal-item ${isCompleted ? 'completed' : ''} priority-${goal.priority}" data-goal-id="${goal.id}" draggable="true">
                 <div class="goal-header">
-                    <div>
-                        <div class="goal-title">${goal.title}</div>
-                        <div class="goal-meta">
-                            <span>Priority: ${goal.priority}</span>
-                            ${goal.dueDate ? `<span>Due: ${new Date(goal.dueDate).toLocaleDateString()}</span>` : ''}
-                        </div>
+                    <div class="goal-title">${goal.title}</div>
+                    <div class="goal-meta">
+                        ${goal.dueDate ? `<span>Due: ${new Date(goal.dueDate).toLocaleDateString()}</span>` : ''}
                     </div>
-                    <button class="btn-secondary" onclick="app.openGoalModal(app.goals.find(g => g.id === '${goal.id}'))">Edit</button>
+                    <div style="display: flex; gap: 6px; justify-content: flex-end; margin-top: 8px;">
+                        <button class="btn-secondary" onclick="app.openGoalModal(app.goals.find(g => g.id === '${goal.id}'))" style="font-size: 0.8em; padding: 4px 10px;">Edit</button>
+                        <button class="btn-secondary" onclick="app.deleteGoal('${goal.id}')" style="font-size: 0.8em; padding: 4px 10px;">Delete</button>
+                    </div>
                 </div>
                 
                 <div class="progress-controls">
@@ -431,10 +578,19 @@ class OrganizationApp {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(timeBlock)
             });
-            
+
             if (response.ok) {
-                await this.loadData();
-                this.calendar.refetchEvents();
+                const savedBlock = await response.json();
+                this.timeBlocks.push(savedBlock);
+
+                // Add event to calendar
+                this.calendar.addEvent({
+                    id: savedBlock.id,
+                    title: savedBlock.title,
+                    start: savedBlock.startTime,
+                    end: savedBlock.endTime,
+                    backgroundColor: this.getCategoryColor(savedBlock.category)
+                });
             }
         } catch (error) {
             console.error('Failed to create time block:', error);
@@ -725,9 +881,42 @@ class OrganizationApp {
             goal.completedAt = goal.status === 'completed' ? new Date().toISOString() : null;
         }
 
-        await this.saveGoal(goal);
-        this.renderGoals();
-        this.renderTodoList();
+        try {
+            await fetch(`/api/goals/${goalId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(goal)
+            });
+            this.renderGoals();
+            this.renderTodoList();
+        } catch (error) {
+            console.error('Failed to toggle todo:', error);
+        }
+    }
+
+    async deleteGoal(goalId) {
+        if (!confirm('Are you sure you want to delete this goal?')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/goals/${goalId}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                // Remove from local array
+                const goalIndex = this.goals.findIndex(g => g.id === goalId);
+                if (goalIndex !== -1) {
+                    this.goals.splice(goalIndex, 1);
+                }
+                this.renderGoals();
+                this.renderTodoList();
+            }
+        } catch (error) {
+            console.error('Failed to delete goal:', error);
+            alert('Failed to delete goal. Please try again.');
+        }
     }
 }
 

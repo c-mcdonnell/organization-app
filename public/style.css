@@ -108,12 +108,30 @@ nav {
     margin-bottom: 12px;
     border-left: 4px solid #007AFF;
     box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    cursor: move;
+    transition: opacity 0.2s, box-shadow 0.2s;
+}
+
+.goal-item:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.goal-item.dragging {
+    opacity: 0.5;
+}
+
+.goals-list {
+    min-height: 50px;
+}
+
+.goals-list.drag-over {
+    background-color: #f0f8ff;
+    border: 2px dashed #007AFF;
+    border-radius: 8px;
 }
 
 .goal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
+    display: block;
     margin-bottom: 12px;
 }
 
@@ -130,9 +148,9 @@ nav {
     gap: 12px;
 }
 
-.priority-high { border-left-color: #ff3b30; }
-.priority-medium { border-left-color: #ff9500; }
-.priority-low { border-left-color: #34c759; }
+.priority-high { border-left-color: #007AFF; }
+.priority-medium { border-left-color: #007AFF; }
+.priority-low { border-left-color: #007AFF; }
 
 .progress-bar {
     width: 100%;

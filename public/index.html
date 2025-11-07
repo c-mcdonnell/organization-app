@@ -13,6 +13,7 @@
             <h1>Organization App</h1>
             <nav>
                 <button id="goals-tab" class="tab-button active">Goals</button>
+                <button id="completed-tab" class="tab-button">Completed</button>
                 <button id="todo-tab" class="tab-button">To Do List</button>
                 <button id="calendar-tab" class="tab-button">Calendar</button>
                 <button id="weekly-tab" class="tab-button">Weekly Plan</button>
@@ -57,11 +58,12 @@
                         <div class="goals-list" id="chores-goals"></div>
                     </div>
                 </div>
+            </section>
 
-                <div class="completed-goals">
-                    <h3>Completed Goals</h3>
-                    <div id="completed-goals-list"></div>
-                </div>
+            <!-- Completed Section -->
+            <section id="completed-section" class="tab-content">
+                <h2>Completed Goals</h2>
+                <div id="completed-goals-list"></div>
             </section>
 
             <!-- To do List Section -->
@@ -128,11 +130,6 @@
                     <option value="chores">Chores</option>
                 </select>
                 <textarea id="goal-description" placeholder="Description"></textarea>
-                <select id="goal-priority">
-                    <option value="low">Low Priority</option>
-                    <option value="medium" selected>Medium Priority</option>
-                    <option value="high">High Priority</option>
-                </select>
                 <input type="date" id="goal-due-date">
                 <div class="progress-input-container">
                     <label for="goal-progress">Initial Progress:</label>
@@ -157,6 +154,18 @@
                 <input type="text" id="category-name" placeholder="Category name" required>
                 <input type="color" id="category-color" value="#007AFF">
                 <button type="submit" class="btn-primary">Add Category</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="edit-category-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="app.closeEditCategoryModal()">&times;</span>
+            <h2>Edit Category</h2>
+            <form id="edit-category-form">
+                <input type="text" id="edit-category-name" placeholder="Category name" required>
+                <input type="color" id="edit-category-color" value="#007AFF">
+                <button type="submit" class="btn-primary">Save Changes</button>
             </form>
         </div>
     </div>
