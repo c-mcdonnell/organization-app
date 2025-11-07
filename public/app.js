@@ -984,8 +984,14 @@ class OrganizationApp {
     }
 
     async completeGoal(goalId) {
+        console.log('completeGoal called with ID:', goalId);
         const goal = this.goals.find(g => g.id === goalId);
-        if (!goal) return;
+        console.log('Found goal:', goal);
+
+        if (!goal) {
+            console.error('Goal not found with ID:', goalId);
+            return;
+        }
 
         // Mark as completed
         goal.status = 'completed';
@@ -993,13 +999,16 @@ class OrganizationApp {
         goal.completedAt = new Date().toISOString();
 
         try {
+            console.log('Sending update to server...');
             const response = await fetch(`/api/goals/${goalId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(goal)
             });
 
+            console.log('Server response:', response.status);
             if (response.ok) {
+                console.log('Goal completed successfully, reloading data...');
                 await this.loadData();
                 this.renderGoals();
                 this.renderCompletedGoals();
