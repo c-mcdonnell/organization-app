@@ -533,7 +533,12 @@ class OrganizationApp {
         return `
             <div class="goal-item ${isCompleted ? 'completed' : ''} priority-${goal.priority}" data-goal-id="${goal.id}" draggable="true">
                 <div class="goal-header">
-                    <div class="goal-title">${goal.title}</div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" ${isCompleted ? 'checked' : ''}
+                               onchange="app.completeGoal('${goal.id}')"
+                               style="width: 18px; height: 18px; cursor: pointer;">
+                        <div class="goal-title">${goal.title}</div>
+                    </div>
                     <div class="goal-meta">
                         ${goal.dueDate ? `<span>Due: ${new Date(goal.dueDate).toLocaleDateString()}</span>` : ''}
                     </div>
@@ -967,17 +972,41 @@ class OrganizationApp {
             });
 
             if (response.ok) {
-                // Remove from local array
-                const goalIndex = this.goals.findIndex(g => g.id === goalId);
-                if (goalIndex !== -1) {
-                    this.goals.splice(goalIndex, 1);
-                }
+                await this.loadData();
                 this.renderGoals();
+                this.renderCompletedGoals();
                 this.renderTodoList();
             }
         } catch (error) {
             console.error('Failed to delete goal:', error);
             alert('Failed to delete goal. Please try again.');
+        }
+    }
+
+    async completeGoal(goalId) {
+        const goal = this.goals.find(g => g.id === goalId);
+        if (!goal) return;
+
+        // Mark as completed
+        goal.status = 'completed';
+        goal.progress = 1;
+        goal.completedAt = new Date().toISOString();
+
+        try {
+            const response = await fetch(`/api/goals/${goalId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(goal)
+            });
+
+            if (response.ok) {
+                await this.loadData();
+                this.renderGoals();
+                this.renderCompletedGoals();
+                this.renderTodoList();
+            }
+        } catch (error) {
+            console.error('Failed to complete goal:', error);
         }
     }
 }
