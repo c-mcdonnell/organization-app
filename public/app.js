@@ -241,7 +241,7 @@ class OrganizationApp {
 
     async handleCategorySubmit(e) {
         e.preventDefault();
-        
+
         const categoryData = {
             name: document.getElementById('category-name').value,
             color: document.getElementById('category-color').value
@@ -253,11 +253,12 @@ class OrganizationApp {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(categoryData)
             });
-            
+
             if (response.ok) {
                 await this.loadData();
                 this.renderCategoriesGrid();
                 this.updateCategorySelect();
+                this.renderGoals();
                 this.closeCategoryModal();
                 document.getElementById('category-form').reset();
             }
