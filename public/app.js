@@ -28,18 +28,63 @@ class OrganizationApp {
             const response = await fetch('/api/goals');
             this.goals = await response.json();
             console.log('Loaded goals:', this.goals);
-            
+
             const timeBlocksResponse = await fetch('/api/timeblocks');
             this.timeBlocks = await timeBlocksResponse.json();
-            
+
             const analyticsResponse = await fetch('/api/analytics');
             this.analytics = await analyticsResponse.json();
-            
+
             const categoriesResponse = await fetch('/api/categories');
             this.categories = await categoriesResponse.json();
             console.log('Loaded categories:', this.categories);
+
+            // Clean up inconsistent data
+            await this.cleanupInconsistentData();
         } catch (error) {
             console.error('Failed to load data:', error);
+        }
+    }
+
+    async cleanupInconsistentData() {
+        let needsUpdate = false;
+
+        for (const goal of this.goals) {
+            let goalUpdated = false;
+
+            // Fix goals with progress=1 but status='active'
+            if (goal.progress === 1 && goal.status !== 'completed') {
+                goal.status = 'completed';
+                goal.completedAt = goal.completedAt || new Date().toISOString();
+                goalUpdated = true;
+            }
+
+            // Fix goals with progress<1 but status='completed'
+            if (goal.progress < 1 && goal.status === 'completed') {
+                goal.status = 'active';
+                goal.completedAt = null;
+                goalUpdated = true;
+            }
+
+            if (goalUpdated) {
+                needsUpdate = true;
+                console.log(`Fixing inconsistent goal: ${goal.title}`);
+                try {
+                    await fetch(`/api/goals/${goal.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(goal)
+                    });
+                } catch (error) {
+                    console.error(`Failed to fix goal ${goal.id}:`, error);
+                }
+            }
+        }
+
+        if (needsUpdate) {
+            console.log('Data cleanup complete, reloading...');
+            const response = await fetch('/api/goals');
+            this.goals = await response.json();
         }
     }
 
@@ -311,7 +356,7 @@ class OrganizationApp {
         if (!goal) return;
 
         goal.progress = this.calculateProgress(goal);
-        
+
         if (goal.progress === 1 && goal.status !== 'completed') {
             goal.status = 'completed';
             goal.completedAt = new Date().toISOString();
@@ -326,8 +371,10 @@ class OrganizationApp {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(goal)
             });
+            await this.loadData();
             this.renderGoals();
             this.renderCompletedGoals();
+            this.renderTodoList();
         } catch (error) {
             console.error('Failed to update goal:', error);
         }
@@ -876,9 +923,22 @@ class OrganizationApp {
             if (subtask) {
                 subtask.completed = !subtask.completed;
             }
+            // Recalculate progress and update status if needed
+            goal.progress = this.calculateProgress(goal);
+            if (goal.progress === 1 && goal.status !== 'completed') {
+                goal.status = 'completed';
+                goal.completedAt = new Date().toISOString();
+            } else if (goal.progress < 1 && goal.status === 'completed') {
+                goal.status = 'active';
+                goal.completedAt = null;
+            }
         } else {
             goal.status = goal.status === 'completed' ? 'active' : 'completed';
             goal.completedAt = goal.status === 'completed' ? new Date().toISOString() : null;
+            // Update progress to match status
+            if (goal.status === 'completed') {
+                goal.progress = 1;
+            }
         }
 
         try {
@@ -887,7 +947,9 @@ class OrganizationApp {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(goal)
             });
+            await this.loadData();
             this.renderGoals();
+            this.renderCompletedGoals();
             this.renderTodoList();
         } catch (error) {
             console.error('Failed to toggle todo:', error);
