@@ -6,6 +6,7 @@
     <title>Organization App</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -108,6 +109,33 @@
             <!-- Analytics Section -->
             <section id="analytics-section" class="tab-content">
                 <h2>Productivity Analytics</h2>
+
+                <!-- Google Calendar Integration -->
+                <div class="calendar-integration-panel">
+                    <h3>Google Calendar Integration</h3>
+                    <div id="calendar-status"></div>
+                    <div id="calendar-controls"></div>
+                    <div id="last-sync-info"></div>
+                </div>
+
+                <!-- Weekly Breakdown -->
+                <div class="weekly-breakdown-panel">
+                    <h3>Weekly Time Breakdown</h3>
+                    <div class="week-selector">
+                        <button id="prev-week-btn" class="btn-secondary">← Previous Week</button>
+                        <span id="current-week-display">Select a week</span>
+                        <button id="next-week-btn" class="btn-secondary">Next Week →</button>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="weekly-pie-chart"></canvas>
+                    </div>
+                    <div id="weekly-stats"></div>
+                </div>
+
+                <!-- Time Tracking Analytics -->
+                <div id="time-analytics"></div>
+
+                <!-- General Analytics -->
                 <div id="analytics-content"></div>
             </section>
         </main>

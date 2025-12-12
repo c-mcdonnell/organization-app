@@ -578,8 +578,40 @@ class OrganizationApp {
         `;
     }
 
-    initializeCalendar() {
+    async initializeCalendar() {
         const calendarEl = document.getElementById('calendar');
+
+        // Combine time blocks and synced calendar events
+        const allEvents = this.timeBlocks.map(block => ({
+            id: block.id,
+            title: block.title,
+            start: block.startTime,
+            end: block.endTime,
+            backgroundColor: this.getCategoryColor(block.category),
+            extendedProps: { source: 'manual', editable: true }
+        }));
+
+        // Load synced Google Calendar events
+        try {
+            const response = await fetch('/api/calendar/events');
+            const { events } = await response.json();
+
+            const syncedEvents = events.map(event => ({
+                id: event.id,
+                title: event.title,
+                start: event.startTime,
+                end: event.endTime,
+                allDay: event.allDay,
+                backgroundColor: this.getCategoryColor(event.category),
+                borderColor: '#666',
+                extendedProps: { source: 'google_calendar', editable: false }
+            }));
+
+            allEvents.push(...syncedEvents);
+        } catch (error) {
+            console.error('Failed to load synced calendar events:', error);
+        }
+
         this.calendar = new FullCalendar.Calendar(calendarEl, {
             initialView: 'timeGridWeek',
             headerToolbar: {
@@ -587,18 +619,18 @@ class OrganizationApp {
                 center: 'title',
                 right: 'dayGridMonth,timeGridWeek,timeGridDay'
             },
-            events: this.timeBlocks.map(block => ({
-                id: block.id,
-                title: block.title,
-                start: block.startTime,
-                end: block.endTime,
-                backgroundColor: this.getCategoryColor(block.category)
-            })),
+            events: allEvents,
             editable: true,
             selectable: true,
             select: (info) => this.handleTimeBlockCreate(info),
-            eventClick: (info) => this.handleTimeBlockClick(info)
+            eventClick: (info) => this.handleTimeBlockClick(info),
+            eventAllow: (dropInfo, draggedEvent) => {
+                // Only allow manual events to be dragged, not synced events
+                return draggedEvent.extendedProps.source === 'manual';
+            }
         });
+
+        this.calendar.render();
     }
 
     getCategoryColor(category) {
@@ -679,7 +711,17 @@ class OrganizationApp {
         `;
     }
 
-    renderAnalytics() {
+    async renderAnalytics() {
+        // Check calendar connection status
+        await this.updateCalendarStatus();
+
+        // Load and display time analytics
+        await this.loadTimeAnalytics();
+
+        // Initialize weekly breakdown
+        this.initWeeklyBreakdown();
+
+        // Render general analytics
         const analyticsContainer = document.getElementById('analytics-content');
         analyticsContainer.innerHTML = `
             <div class="productivity-chart">
@@ -693,6 +735,188 @@ class OrganizationApp {
                 </div>
             </div>
         `;
+    }
+
+    async updateCalendarStatus() {
+        try {
+            const response = await fetch('/api/auth/google/status');
+            const { connected } = await response.json();
+
+            const statusDiv = document.getElementById('calendar-status');
+            const controlsDiv = document.getElementById('calendar-controls');
+
+            if (connected) {
+                statusDiv.innerHTML = '<p class="status-connected">✓ Connected to Google Calendar</p>';
+                controlsDiv.innerHTML = `
+                    <button id="sync-calendar-btn" class="btn-primary">Sync Calendar</button>
+                    <button id="disconnect-calendar-btn" class="btn-secondary">Disconnect</button>
+                `;
+
+                document.getElementById('sync-calendar-btn').addEventListener('click', () => this.syncCalendar());
+                document.getElementById('disconnect-calendar-btn').addEventListener('click', () => this.disconnectCalendar());
+            } else {
+                statusDiv.innerHTML = '<p class="status-disconnected">Not connected to Google Calendar</p>';
+                controlsDiv.innerHTML = `
+                    <button id="connect-calendar-btn" class="btn-primary">Connect Google Calendar</button>
+                    <p class="calendar-help">Connect your Google Calendar to automatically track time spent on activities.</p>
+                `;
+
+                document.getElementById('connect-calendar-btn').addEventListener('click', () => this.connectCalendar());
+            }
+        } catch (error) {
+            console.error('Failed to check calendar status:', error);
+        }
+    }
+
+    async connectCalendar() {
+        try {
+            const response = await fetch('/api/auth/google');
+            const { authUrl } = await response.json();
+            window.location.href = authUrl;
+        } catch (error) {
+            console.error('Failed to initiate calendar connection:', error);
+            alert('Failed to connect to Google Calendar. Please try again.');
+        }
+    }
+
+    async disconnectCalendar() {
+        if (!confirm('Are you sure you want to disconnect your Google Calendar?')) {
+            return;
+        }
+
+        try {
+            await fetch('/api/auth/google/disconnect', { method: 'POST' });
+            await this.updateCalendarStatus();
+            await this.loadTimeAnalytics();
+            alert('Google Calendar disconnected successfully.');
+        } catch (error) {
+            console.error('Failed to disconnect calendar:', error);
+            alert('Failed to disconnect calendar. Please try again.');
+        }
+    }
+
+    async syncCalendar() {
+        const syncBtn = document.getElementById('sync-calendar-btn');
+        const originalText = syncBtn.textContent;
+        syncBtn.textContent = 'Syncing...';
+        syncBtn.disabled = true;
+
+        try {
+            const response = await fetch('/api/calendar/sync', { method: 'POST' });
+            const result = await response.json();
+
+            if (result.success) {
+                const lastSyncDiv = document.getElementById('last-sync-info');
+                lastSyncDiv.innerHTML = `
+                    <p class="sync-success">✓ Synced ${result.eventCount} events at ${new Date(result.lastSync).toLocaleString()}</p>
+                `;
+                await this.loadTimeAnalytics();
+                await this.loadCalendarEvents(); // Refresh calendar view if on that tab
+            } else {
+                throw new Error(result.error || 'Sync failed');
+            }
+        } catch (error) {
+            console.error('Calendar sync failed:', error);
+            alert('Failed to sync calendar: ' + error.message);
+        } finally {
+            syncBtn.textContent = originalText;
+            syncBtn.disabled = false;
+        }
+    }
+
+    async loadTimeAnalytics() {
+        try {
+            const response = await fetch('/api/analytics/time-by-category');
+            const { timeByCategory, lastSync } = await response.json();
+
+            const timeAnalyticsDiv = document.getElementById('time-analytics');
+
+            if (!timeByCategory || Object.keys(timeByCategory).length === 0) {
+                timeAnalyticsDiv.innerHTML = '<p style="margin-top: 20px;">No time tracking data available. Connect your calendar and sync to see analytics.</p>';
+                return;
+            }
+
+            let html = '<div class="time-by-category"><h3>Time Spent by Category</h3>';
+
+            // Sort categories by hours (descending)
+            const sortedCategories = Object.entries(timeByCategory).sort((a, b) => b[1].hours - a[1].hours);
+
+            sortedCategories.forEach(([categoryId, data]) => {
+                const category = this.categories.find(c => c.id === categoryId);
+                const categoryName = category ? category.name : 'Uncategorized';
+                const categoryColor = category ? category.color : '#999';
+                const hours = data.hours.toFixed(1);
+
+                html += `
+                    <div class="category-time-bar">
+                        <div class="category-time-label">
+                            <span style="color: ${categoryColor};">●</span>
+                            <strong>${categoryName}</strong>
+                        </div>
+                        <div class="category-time-info">
+                            <span>${hours} hours</span>
+                            <span class="event-count">(${data.eventCount} events)</span>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+
+            if (lastSync) {
+                html += `<p class="last-sync-time">Last synced: ${new Date(lastSync).toLocaleString()}</p>`;
+            }
+
+            timeAnalyticsDiv.innerHTML = html;
+        } catch (error) {
+            console.error('Failed to load time analytics:', error);
+        }
+    }
+
+    async loadCalendarEvents() {
+        // This will be used to refresh the calendar view
+        if (this.calendar) {
+            try {
+                const response = await fetch('/api/calendar/events');
+                const { events } = await response.json();
+
+                // Remove all events and re-add them
+                this.calendar.removeAllEvents();
+
+                // Add manual time blocks
+                this.timeBlocks.forEach(block => {
+                    this.calendar.addEvent({
+                        id: block.id,
+                        title: block.title,
+                        start: block.startTime,
+                        end: block.endTime,
+                        backgroundColor: this.getCategoryColor(block.category),
+                        extendedProps: { source: 'manual', editable: true }
+                    });
+                });
+
+                // Add synced Google Calendar events
+                events.forEach(event => {
+                    this.calendar.addEvent({
+                        id: event.id,
+                        title: event.title,
+                        start: event.startTime,
+                        end: event.endTime,
+                        allDay: event.allDay,
+                        backgroundColor: this.getCategoryColor(event.category),
+                        borderColor: '#666',
+                        extendedProps: { source: 'google_calendar', editable: false }
+                    });
+                });
+            } catch (error) {
+                console.error('Failed to load calendar events:', error);
+            }
+        }
+    }
+
+    getCategoryColor(categoryId) {
+        const category = this.categories.find(c => c.id === categoryId);
+        return category ? category.color : '#999';
     }
 
     async saveGoal(goalData) {
@@ -1018,6 +1242,331 @@ class OrganizationApp {
         } catch (error) {
             console.error('Failed to complete goal:', error);
         }
+    }
+
+    // Weekly Breakdown Methods
+    initWeeklyBreakdown() {
+        // Initialize with current week
+        const today = new Date();
+        const dayOfWeek = today.getDay();
+        const sunday = new Date(today);
+        sunday.setDate(today.getDate() - dayOfWeek);
+        sunday.setHours(0, 0, 0, 0);
+
+        this.currentWeekStart = sunday;
+        this.weeklyChart = null;
+
+        // Set up event listeners
+        document.getElementById('prev-week-btn').addEventListener('click', () => this.changeWeek(-1));
+        document.getElementById('next-week-btn').addEventListener('click', () => this.changeWeek(1));
+
+        // Load current week data
+        this.loadWeeklyData();
+    }
+
+    changeWeek(direction) {
+        this.currentWeekStart.setDate(this.currentWeekStart.getDate() + (direction * 7));
+        this.loadWeeklyData();
+    }
+
+    formatWeekDisplay(weekStart) {
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+
+        const options = { month: 'short', day: 'numeric' };
+        const startStr = weekStart.toLocaleDateString('en-US', options);
+        const endStr = weekEnd.toLocaleDateString('en-US', options);
+        const year = weekStart.getFullYear();
+
+        return `${startStr} - ${endStr}, ${year}`;
+    }
+
+    categorizeEvent(title) {
+        const lower = title.toLowerCase().trim();
+
+        // Play (check early because "play:" is specific)
+        if (lower.includes('play:') || lower.includes('marten') ||
+            lower.includes('susan') || lower.includes('coaching session') ||
+            lower.includes('character voice')) {
+            return 'play';
+        }
+
+        // Work (must check before other categories that might contain "work")
+        if (lower === 'work' || lower === 'Work' ||
+            (lower.includes('work') && !lower.includes('walk') && !lower.includes('workout') && !lower.includes('network')) ||
+            (lower.includes('meeting') && !lower.includes('play')) ||
+            lower.includes('touchpoint') || lower.includes('sync') ||
+            lower.includes('workshop') || lower.includes('prep for 1:1')) {
+            return 'work';
+        }
+
+        // Exercise (including specific exercise types)
+        if (lower.includes('workout') || lower.includes('saturday stairs') ||
+            lower.includes('november project') || lower.includes('hike') ||
+            lower.includes('yoga') || lower.includes('sculpt') || lower.includes('vinyasa') ||
+            lower.includes('run club') || lower === 'run' ||
+            lower.includes('walk to') || lower.includes('walk from') ||
+            lower.includes('weflowhard') || lower.includes('fitness:') ||
+            lower.includes('stretching')) {
+            return 'exercise';
+        }
+
+        // Stand-up production (including writing)
+        if (lower.includes('coffee with david lee') ||
+            lower.includes('stand up') || lower.includes('standup') ||
+            lower.includes('hoopla') || lower.includes('open mic') ||
+            lower.includes('hype mic') || lower.includes('comedy')) {
+            return 'stand-up production';
+        }
+
+        // UCLA
+        if (lower.includes('ucla') || lower.includes('watch tms') ||
+            lower.includes('watch veep') || lower.includes('abbott elementary') ||
+            lower.includes('tv')) {
+            return 'UCLA';
+        }
+
+        // Social
+        if (lower.includes('joel') || lower.includes('date') ||
+            lower.includes('dinner with kendall') || lower.includes('hang with') ||
+            lower.includes('church') || lower.includes('hannah') ||
+            lower.includes('alison') || lower.includes('philharmonic') ||
+            lower.includes('wicked') || lower.includes('harry potter') ||
+            lower.includes('funny games')) {
+            return 'social';
+        }
+
+        // WiS production
+        if (lower.includes('meet simone') || lower.includes('business plan') ||
+            lower.includes('wis') || lower.includes('post on linkedin') ||
+            lower.includes('women in stem')) {
+            return 'WiS production';
+        }
+
+        // Family
+        if (lower.includes('travel') || lower.includes('flight') ||
+            lower.includes('thanksgiving') || lower.includes('family time') ||
+            lower.includes('get nails done') || lower.includes('mm weekly') ||
+            lower.includes('fort lauderdale') || lower.includes('fll') ||
+            lower.includes('pool/sauna') || lower.includes('black friday') ||
+            lower.includes('drive rachel') || lower.includes('drive allie') ||
+            lower.includes('talk to mom') || lower.includes('book flight')) {
+            return 'family';
+        }
+
+        // Job search
+        if (lower.includes('update linkedin') || lower.includes('job app') ||
+            lower.includes('resume') || lower === 'job search' ||
+            lower.includes('kustomer') || (lower.includes('pro dev') && lower.includes('tyler'))) {
+            return 'job search';
+        }
+
+        // Personal writing
+        if (lower.includes('blog writing') || lower.includes('write: blog') ||
+            lower.includes('blog post')) {
+            return 'personal writing';
+        }
+
+        // Personal development
+        if (lower.includes('journal')) {
+            return 'personal development';
+        }
+
+        // Decision stress
+        if (lower.includes('gift shopping') || lower.includes('plane ticket') ||
+            lower.includes('buy plane') || lower.includes('re-think')) {
+            return 'decision stress';
+        }
+
+        // Errands/chores
+        if (lower.includes('grocery') || lower.includes('trader joe') ||
+            lower.includes('food pantry') || (lower.includes('shopping') && !lower.includes('gift')) ||
+            lower.includes('laundry') || lower.includes('clean room') ||
+            lower.includes('bargain basket') || lower.includes('lunch') ||
+            lower.includes('breakfast') || (lower.includes('dinner') && !lower.includes('kendall')) ||
+            lower.includes('cook') || lower.includes('meal') || lower.includes('make/eat') ||
+            lower.includes('doctor') || lower.includes('tia ') || lower.includes('shower') ||
+            lower.includes('appt') || lower.includes('nap')) {
+            return 'errands/chores';
+        }
+
+        // Additional social events
+        if (lower.includes('hang with') || lower.includes('stephen') ||
+            lower.includes('roommates') || lower.includes('date')) {
+            return 'social';
+        }
+
+        // Additional exercise
+        if (lower.includes('walk') && !lower.includes('walk to') && !lower.includes('walk from')) {
+            return 'exercise';
+        }
+
+        // Additional family/travel
+        if (lower.includes('drive') && (lower.includes('airport') || lower.includes('allie') || lower.includes('rachel'))) {
+            return 'family';
+        }
+
+        // Additional WiS
+        if (lower.includes('women in stem') || lower.includes('simone')) {
+            return 'WiS production';
+        }
+
+        // Additional writing
+        if (lower === 'write' || (lower.includes('write') && !lower.includes('stand up'))) {
+            return 'personal writing';
+        }
+
+        // Additional social/entertainment
+        if (lower.includes('essay club') || lower.includes('meeting (')) {
+            return 'social';
+        }
+
+        // Professional development
+        if (lower.includes('pro dev') || lower.includes('prep for 1:1') || lower.includes('draft passes')) {
+            return 'work';
+        }
+
+        return 'miscellaneous';
+    }
+
+    async loadWeeklyData() {
+        try {
+            const weekStartStr = this.currentWeekStart.toISOString().split('T')[0];
+            const response = await fetch(`/api/analytics/weekly?weekStart=${weekStartStr}`);
+            const data = await response.json();
+
+            // Update week display
+            document.getElementById('current-week-display').textContent = this.formatWeekDisplay(this.currentWeekStart);
+
+            // Categorize events and calculate time
+            const timeByCategory = {};
+            let totalHours = 0;
+
+            data.events.forEach(event => {
+                const category = this.categorizeEvent(event.title);
+                const start = new Date(event.startTime);
+                const end = new Date(event.endTime);
+                const hours = (end - start) / (1000 * 60 * 60);
+
+                if (!timeByCategory[category]) {
+                    timeByCategory[category] = 0;
+                }
+                timeByCategory[category] += hours;
+                totalHours += hours;
+            });
+
+            // Render chart
+            this.renderWeeklyChart(timeByCategory, totalHours);
+
+            // Update stats
+            this.renderWeeklyStats(timeByCategory, totalHours, data.events.length);
+        } catch (error) {
+            console.error('Failed to load weekly data:', error);
+            document.getElementById('current-week-display').textContent = 'Error loading week data';
+        }
+    }
+
+    renderWeeklyChart(timeByCategory, totalHours) {
+        const ctx = document.getElementById('weekly-pie-chart');
+
+        // Category colors
+        const colors = {
+            'work': '#4169E1',
+            'exercise': '#32CD32',
+            'social': '#FF69B4',
+            'UCLA': '#9370DB',
+            'play': '#FFD700',
+            'stand-up production': '#FF6347',
+            'WiS production': '#20B2AA',
+            'family': '#FF8C00',
+            'personal writing': '#BA55D3',
+            'personal development': '#7FFF00',
+            'job search': '#4682B4',
+            'errands/chores': '#DDA0DD',
+            'decision stress': '#DC143C',
+            'miscellaneous': '#A9A9A9'
+        };
+
+        // Prepare data
+        const categories = Object.keys(timeByCategory).sort((a, b) => timeByCategory[b] - timeByCategory[a]);
+        const data = categories.map(cat => timeByCategory[cat]);
+        const backgroundColors = categories.map(cat => colors[cat] || '#A9A9A9');
+        const labels = categories.map(cat => {
+            const hours = timeByCategory[cat];
+            const percentage = ((hours / totalHours) * 100).toFixed(1);
+            return `${cat} (${hours.toFixed(1)}h, ${percentage}%)`;
+        });
+
+        // Destroy existing chart if it exists
+        if (this.weeklyChart) {
+            this.weeklyChart.destroy();
+        }
+
+        // Create new chart
+        this.weeklyChart = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: data,
+                    backgroundColor: backgroundColors,
+                    borderWidth: 2,
+                    borderColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: {
+                            boxWidth: 15,
+                            padding: 10,
+                            font: {
+                                size: 11
+                            }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.label;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    renderWeeklyStats(timeByCategory, totalHours, eventCount) {
+        const statsDiv = document.getElementById('weekly-stats');
+
+        if (totalHours === 0) {
+            statsDiv.innerHTML = '<p style="text-align: center; color: #666; margin-top: 20px;">No events for this week</p>';
+            return;
+        }
+
+        // Calculate top categories
+        const sortedCategories = Object.entries(timeByCategory)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5);
+
+        statsDiv.innerHTML = `
+            <div style="margin-top: 20px; padding: 15px; background: #f5f5f5; border-radius: 8px;">
+                <h4 style="margin-top: 0;">Week Summary</h4>
+                <p><strong>Total tracked time:</strong> ${totalHours.toFixed(1)} hours</p>
+                <p><strong>Number of events:</strong> ${eventCount}</p>
+                <p><strong>Top 5 categories:</strong></p>
+                <ol style="margin: 10px 0;">
+                    ${sortedCategories.map(([cat, hours]) => {
+                        const percentage = ((hours / totalHours) * 100).toFixed(1);
+                        return `<li>${cat}: ${hours.toFixed(1)}h (${percentage}%)</li>`;
+                    }).join('')}
+                </ol>
+            </div>
+        `;
     }
 }
 
